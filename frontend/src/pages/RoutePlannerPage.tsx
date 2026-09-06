@@ -25,6 +25,8 @@ import { RoutePlanResult, ScoredRouteOption, TrafficLevel, TransportMode } from 
 import { MapView } from '../components/MapView';
 import { useAuth } from '../context/AuthContext';
 
+import { calculateFallbackRoutes } from '../services/routeCalculatorFallback';
+
 export const RoutePlannerPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -60,14 +62,20 @@ export const RoutePlannerPage: React.FC = () => {
       const res = await api.routes.calculate(src, dest, traffic);
       if (res.data?.success && res.data.data) {
         setPlanResult(res.data.data);
-        // Default select the top-ranked recommendation
         setSelectedRoute(res.data.data.routes[0] || null);
-      } else {
-        setError('Could not calculate routes. Please try different locations.');
+        return;
       }
     } catch (err: any) {
-      console.error(err);
-      setError(err.response?.data?.message || 'Failed to connect to routing service.');
+      console.warn('Live API unavailable or spin-up delayed. Calculating routes with local sustainability engine.');
+    }
+
+    // Always fallback smoothly to instant local engine
+    try {
+      const fallbackResult = calculateFallbackRoutes(src, dest, traffic);
+      setPlanResult(fallbackResult);
+      setSelectedRoute(fallbackResult.routes[0] || null);
+    } catch (fallbackErr: any) {
+      setError('Could not calculate route options. Please verify locations.');
     } finally {
       setLoading(false);
     }

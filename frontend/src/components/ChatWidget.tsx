@@ -56,14 +56,18 @@ export const ChatWidget: React.FC = () => {
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         };
         setMessages((prev) => [...prev, aiMsg]);
+        return;
       }
     } catch {
+      // Use fallback emulator if backend is spinning up or offline
+      const { emulateClientGraniteResponse } = await import('../services/aiFallback');
+      const fallbackText = emulateClientGraniteResponse(messageToSend);
       setMessages((prev) => [
         ...prev,
         {
           id: Math.random().toString(),
           sender: 'granite',
-          text: 'Sorry, I encountered an issue reaching the IBM Granite service. Please try again.',
+          text: fallbackText,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         },
       ]);
