@@ -53,13 +53,15 @@ app.use((err, req, res, next) => {
         message: err.message || 'Internal Server Error',
     });
 });
-app.listen(PORT, () => {
-    console.log(`====================================================`);
-    console.log(` 🌱 GreenRoute Backend API running on port ${PORT}`);
-    console.log(` 🌍 Primary SDG: SDG 11 - Sustainable Cities & Communities`);
-    console.log(` 🤖 IBM Granite Model Layer: Active`);
-    console.log(` 🔗 Health check: http://localhost:${PORT}/api/health`);
-    console.log(`====================================================`);
-});
+if (!process.env.VERCEL) {
+    app.listen(PORT, () => {
+        console.log(`====================================================`);
+        console.log(` 🌱 GreenRoute Backend API running on port ${PORT}`);
+        console.log(` 🌍 Primary SDG: SDG 11 - Sustainable Cities & Communities`);
+        console.log(` 🤖 IBM Granite Model Layer: Active`);
+        console.log(` 🔗 Health check: http://localhost:${PORT}/api/health`);
+        console.log(`====================================================`);
+    });
+}
 exports.default = app;
 //# sourceMappingURL=server.js.map
