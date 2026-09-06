@@ -1,0 +1,97 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 String       @id @default(uuid())
+  name               String
+  email              String       @unique
+  password           String
+  city               String       @default("Eco City")
+  preferredTransport String       @default("Metro")
+  role               String       @default("user") // "user" | "admin"
+  points             Int          @default(0)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  trips              Trip[]
+  rewards            Reward[]
+  reports            Report[]
+  redemptions        Redemption[]
+}
+
+model Trip {
+  id                  String   @id @default(uuid())
+  userId              String
+  source              String
+  destination         String
+  distance            Float    // in km
+  duration            Int      // in minutes
+  cost                Float    // in currency units ($)
+  transportType       String   // Walking, Bicycle, Metro, Bus, EV, Car, Ride Share
+  carbonEmission      Float    // in kg CO2
+  carbonSaved         Float    @default(0.0) // compared to baseline personal car
+  sustainabilityScore Float    // 0 to 100
+  trafficDensity      String   @default("Moderate") // Low, Moderate, High
+  pointsEarned        Int      @default(0)
+  createdAt           DateTime @default(now())
+
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Reward {
+  id          String   @id @default(uuid())
+  userId      String
+  points      Int
+  rewardType  String   // Trip Bonus, Eco Badge, Challenge, Milestone
+  description String?
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model RewardItem {
+  id          String       @id @default(uuid())
+  title       String
+  description String
+  pointsCost  Int
+  category    String       // Transit, Discount, Eco Impact, Merchandise
+  badgeIcon   String       @default("leaf")
+  available   Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+
+  redemptions Redemption[]
+}
+
+model Redemption {
+  id           String     @id @default(uuid())
+  userId       String
+  rewardItemId String
+  pointsSpent  Int
+  status       String     @default("active") // "active", "redeemed", "expired"
+  code         String     @unique
+  createdAt    DateTime   @default(now())
+
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rewardItem   RewardItem @relation(fields: [rewardItemId], references: [id], onDelete: Cascade)
+}
+
+model Report {
+  id             String   @id @default(uuid())
+  userId         String
+  month          String   // e.g., "August 2026", "September 2026"
+  totalTrips     Int
+  emissionsSaved Float    // in kg CO2
+  totalDistance  Float    @default(0.0)
+  topTransport   String   @default("Metro")
+  avgScore       Float    @default(85.0)
+  aiSummary      String?  // IBM Granite generated insights and recommendations
+  createdAt      DateTime @default(now())
+
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

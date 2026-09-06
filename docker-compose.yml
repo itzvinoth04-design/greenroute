@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: greenroute-backend
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - NODE_ENV=production
+      - JWT_SECRET=greenroute_super_secret_jwt_key_2026_eco
+      - DATABASE_URL=file:/app/prisma/dev.db
+      - WATSONX_APIKEY=${WATSONX_APIKEY:-}
+      - WATSONX_PROJECT_ID=${WATSONX_PROJECT_ID:-}
+      - WATSONX_URL=${WATSONX_URL:-https://us-south.ml.cloud.ibm.com}
+      - IBM_GRANITE_MODEL_ID=ibm/granite-13b-chat-v2
+    volumes:
+      - greenroute-data:/app/prisma
+    networks:
+      - greenroute-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: greenroute-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - greenroute-network
+
+volumes:
+  greenroute-data:
+    driver: local
+
+networks:
+  greenroute-network:
+    driver: bridge
