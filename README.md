@@ -76,6 +76,14 @@ $$\text{Sustainability Score} = (0.40 \times S_{\text{Carbon}}) + (0.30 \times S
 
 ---
 
+## 🌐 Cloud Deployment Architecture
+
+- **Backend API:** Hosted on [Render](https://render.com) (`Node.js/Express + Prisma SQLite`)
+- **Frontend SPA:** Hosted on [Vercel](https://vercel.com) (`React + Vite + Tailwind CSS`)
+- **Continuous Deployment:** Auto-deployed from GitHub `main` branch.
+
+---
+
 ## 🛠 Tech Stack
 
 - **Frontend:** React 18, TypeScript, Tailwind CSS, Lucide React, React Router v6, Recharts, Leaflet, Canvas Confetti.
