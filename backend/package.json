@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "node node_modules/prisma/build/index.js generate && node node_modules/prisma/build/index.js db push && node -r ts-node/register src/database/seed.ts && node node_modules/typescript/bin/tsc",
+    "render-build": "node node_modules/prisma/build/index.js generate && node node_modules/prisma/build/index.js db push && node -r ts-node/register src/database/seed.ts && node node_modules/typescript/bin/tsc",
     "postinstall": "node node_modules/prisma/build/index.js generate",
     "prisma:generate": "node node_modules/prisma/build/index.js generate",
     "prisma:push": "node node_modules/prisma/build/index.js db push",
