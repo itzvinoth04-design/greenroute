@@ -4,7 +4,8 @@
   "private": true,
   "description": "GreenRoute - Sustainable Transport Planner Monorepo",
   "scripts": {
-    "vercel-build": "cd backend && npm install && npx prisma generate && npx prisma db push && npm run seed && cd ../frontend && npm install && npm run build",
+    "vercel-build": "cd frontend && npm install && node scripts/build.js",
+    "build": "cd frontend && npm install && node scripts/build.js",
     "start": "cd backend && npm start",
     "dev:backend": "cd backend && npm run dev",
     "dev:frontend": "cd frontend && npm run dev"
