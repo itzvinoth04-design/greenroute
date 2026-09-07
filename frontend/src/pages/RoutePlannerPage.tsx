@@ -22,6 +22,12 @@ import {
   Crosshair,
   XCircle,
   Compass,
+  CornerUpRight,
+  CornerUpLeft,
+  ArrowUp,
+  Route,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { api } from '../services/api';
 import { RoutePlanResult, ScoredRouteOption, TrafficLevel, TransportMode } from '../types';
@@ -61,6 +67,7 @@ export const RoutePlannerPage: React.FC = () => {
 
   // Active Journey state
   const [activeCommute, setActiveCommute] = useState<ActiveCommute | null>(null);
+  const [showDirections, setShowDirections] = useState(true);
 
   // Success celebration state
   const [tripRecordedSuccess, setTripRecordedSuccess] = useState<{
@@ -236,12 +243,37 @@ export const RoutePlannerPage: React.FC = () => {
     }
   };
 
+  const getStepIcon = (icon?: string, className = 'w-4 h-4') => {
+    switch (icon) {
+      case 'left':
+        return <CornerUpLeft className={className} />;
+      case 'right':
+        return <CornerUpRight className={className} />;
+      case 'board':
+        return <Train className={className} />;
+      case 'arrive':
+        return <MapPin className={className} />;
+      case 'straight':
+      default:
+        return <ArrowUp className={className} />;
+    }
+  };
+
   const getScoreColor = (score: number) => {
     if (score >= 85) return 'text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950/80 border-emerald-300 dark:border-emerald-800';
     if (score >= 70) return 'text-sky-600 dark:text-sky-400 bg-sky-100 dark:bg-sky-950/80 border-sky-300 dark:border-sky-800';
     if (score >= 50) return 'text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-950/80 border-amber-300 dark:border-amber-800';
     return 'text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-950/80 border-red-300 dark:border-red-800';
   };
+
+  const activeNavRoute = activeCommute ? activeCommute.route : selectedRoute;
+  const navSteps = activeNavRoute?.navigationSteps || [];
+  const currentNavStepIdx =
+    activeCommute && navSteps.length > 0
+      ? Math.min(navSteps.length - 1, Math.floor((activeCommute.progressPercent / 100) * navSteps.length))
+      : 0;
+  const currentNavStep = navSteps[currentNavStepIdx];
+  const nextNavStep = navSteps[currentNavStepIdx + 1];
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
@@ -391,9 +423,9 @@ export const RoutePlannerPage: React.FC = () => {
         )}
       </div>
 
-      {/* Active Commute Live HUD Banner (Only 1 mode selectable at a time) */}
+      {/* Active Commute Live HUD Banner (Google Maps Navigation Style) */}
       {activeCommute && (
-        <div className="p-5 rounded-3xl bg-gradient-to-r from-emerald-950 via-teal-950 to-slate-900 text-white shadow-2xl border border-emerald-500/50 animate-in fade-in slide-in-from-top-4 space-y-4">
+        <div className="p-5 rounded-3xl bg-gradient-to-r from-emerald-950 via-teal-950 to-slate-900 text-white shadow-2xl border-2 border-emerald-500/80 animate-in fade-in slide-in-from-top-4 space-y-4">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-3.5">
               <div
@@ -406,7 +438,7 @@ export const RoutePlannerPage: React.FC = () => {
                 <div className="flex items-center gap-2 mb-0.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
                   <span className="text-[11px] uppercase tracking-wider font-extrabold text-emerald-300">
-                    Live Journey In Progress
+                    Live GPS Navigation Mode
                   </span>
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-slate-300 font-mono">
                     Elapsed: {Math.floor(activeCommute.elapsedSeconds / 60).toString().padStart(2, '0')}:{(activeCommute.elapsedSeconds % 60).toString().padStart(2, '0')}
@@ -443,14 +475,45 @@ export const RoutePlannerPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Google Maps Turn-by-Turn Maneuver HUD Banner */}
+          {currentNavStep && (
+            <div className="p-4 rounded-2xl bg-emerald-950/70 border border-emerald-500/40 flex items-center gap-4 shadow-inner">
+              <div className="w-13 h-13 p-3 rounded-2xl bg-emerald-500 text-slate-950 flex items-center justify-center flex-shrink-0 shadow-md">
+                {getStepIcon(currentNavStep.icon, 'w-7 h-7')}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-extrabold text-emerald-300 uppercase tracking-wider">
+                    Next Direction • In {currentNavStep.distance}
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-slate-200 font-semibold">
+                    Step {currentNavStepIdx + 1} of {navSteps.length}
+                  </span>
+                </div>
+                <div className="text-sm sm:text-base font-black text-white mt-0.5 truncate sm:text-clip">
+                  {currentNavStep.instruction}
+                </div>
+                {nextNavStep && (
+                  <div className="text-xs text-slate-400 mt-1 flex items-center gap-1.5 truncate">
+                    <span className="text-emerald-400 font-bold">Then:</span>
+                    <span className="truncate">{nextNavStep.instruction} ({nextNavStep.distance})</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Progress Bar & Kinematic Waypoint Metric */}
-          <div className="space-y-1.5 pt-2 border-t border-white/10">
+          <div className="space-y-1.5 pt-1">
             <div className="flex justify-between text-xs font-semibold text-emerald-200">
               <span className="flex items-center gap-1">
                 <Compass className="w-3.5 h-3.5" />
                 <span>Waypoints Reached: {activeCommute.progressPercent}%</span>
               </span>
-              <span>{activeCommute.distanceRemainingKm} km to Destination B</span>
+              <span>
+                {activeCommute.distanceRemainingKm} km remaining •{' '}
+                {Math.max(1, Math.round(activeCommute.route.travelTimeMinutes * (1 - activeCommute.progressPercent / 100)))} min left
+              </span>
             </div>
             <div className="w-full h-2.5 rounded-full bg-white/10 overflow-hidden">
               <div
@@ -672,6 +735,99 @@ export const RoutePlannerPage: React.FC = () => {
               activeCommute={activeCommute}
             />
           </div>
+
+          {/* Turn-by-Turn Direction Guide (Google Maps Style) */}
+          {activeNavRoute && navSteps.length > 0 && (
+            <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className="w-8 h-8 rounded-xl flex items-center justify-center text-white shadow-sm"
+                    style={{ backgroundColor: activeNavRoute.color }}
+                  >
+                    <Route className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                      <span>{activeNavRoute.mode} Navigation Guide</span>
+                      {activeCommute && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold animate-pulse">
+                          Live Active
+                        </span>
+                      )}
+                    </h4>
+                    <p className="text-[11px] text-slate-500">
+                      {navSteps.length} waypoints • {activeNavRoute.distanceKm} km • Google Maps turn-by-turn
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowDirections(!showDirections)}
+                  className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                  title={showDirections ? 'Hide Directions' : 'Show Directions'}
+                >
+                  {showDirections ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </button>
+              </div>
+
+              {showDirections && (
+                <div className="space-y-2 pt-1">
+                  {navSteps.map((step, sIdx) => {
+                    const isPassed = activeCommute && sIdx < currentNavStepIdx;
+                    const isCurrent = activeCommute && sIdx === currentNavStepIdx;
+
+                    return (
+                      <div
+                        key={sIdx}
+                        className={`flex items-start gap-3 p-3 rounded-2xl border transition-all ${
+                          isCurrent
+                            ? 'bg-emerald-50 dark:bg-emerald-950/70 border-emerald-500 shadow-sm ring-1 ring-emerald-500/40'
+                            : isPassed
+                            ? 'bg-slate-50/80 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 opacity-60'
+                            : 'bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800'
+                        }`}
+                      >
+                        <div
+                          className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 font-bold text-xs ${
+                            isCurrent
+                              ? 'bg-emerald-600 text-white shadow-md'
+                              : isPassed
+                              ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          {isPassed ? (
+                            <CheckCircle2 className="w-4 h-4" />
+                          ) : (
+                            getStepIcon(step.icon, 'w-4 h-4')
+                          )}
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs font-bold text-slate-900 dark:text-white">
+                              {step.instruction}
+                            </span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex-shrink-0">
+                              {step.distance}
+                            </span>
+                          </div>
+                          {isCurrent && (
+                            <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-extrabold text-emerald-600 dark:text-emerald-400">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                              Active Waypoint
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Selected Route Deep Dive Breakdown */}
           {selectedRoute && (

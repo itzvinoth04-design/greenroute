@@ -18,6 +18,11 @@ export interface RoutePlanResult {
     pathCoordinates: [number, number][];
     color: string;
     icon: string;
+    navigationSteps?: Array<{
+      instruction: string;
+      distance: string;
+      icon: 'straight' | 'left' | 'right' | 'board' | 'arrive';
+    }>;
   })[];
   recommendedMode: TransportMode;
 }
@@ -120,9 +125,23 @@ function normalizeQuery(query: string): string {
  * Resolves location name to coordinates using OpenStreetMap Nominatim with India/Tamil Nadu priority
  */
 export async function geocodeLocation(query: string, defaultFallback: GeoPoint): Promise<GeoPoint> {
+  // 1. Check for coordinates in string format: e.g. "Current Location (13.1381, 80.2038)" or "13.1381, 80.2038"
+  const coordMatch = query.match(/(-?\d+\.\d+)[,\s]+(-?\d+\.\d+)/);
+  if (coordMatch) {
+    const lat = parseFloat(coordMatch[1]);
+    const lng = parseFloat(coordMatch[2]);
+    if (!isNaN(lat) && !isNaN(lng)) {
+      return {
+        name: query.trim() || `Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
+        lat,
+        lng,
+      };
+    }
+  }
+
   const normalized = normalizeQuery(query);
 
-  // 1. Check known hubs dictionary first
+  // 2. Check known hubs dictionary first
   for (const [key, hub] of Object.entries(KNOWN_HUBS)) {
     if (normalized === key || normalized.includes(key)) {
       return { name: hub.name, lat: hub.lat, lng: hub.lng };
@@ -193,6 +212,68 @@ function generatePathWaypoints(
   return points;
 }
 
+function generateNavigationSteps(
+  mode: TransportMode,
+  originName: string,
+  destName: string,
+  distanceKm: number
+): Array<{ instruction: string; distance: string; icon: 'straight' | 'left' | 'right' | 'board' | 'arrive' }> {
+  const shortOrigin = originName.split(',')[0].trim();
+  const shortDest = destName.split(',')[0].trim();
+  const quarter = (distanceKm / 4).toFixed(1);
+  const half = (distanceKm / 2).toFixed(1);
+
+  switch (mode) {
+    case 'Walking':
+      return [
+        { instruction: `Head out from ${shortOrigin} on pedestrian walkway`, distance: '300 m', icon: 'straight' },
+        { instruction: 'Turn left along tree-canopied sidewalk towards arterial road', distance: `${quarter} km`, icon: 'left' },
+        { instruction: 'Cross at the designated pedestrian zebra crossing and keep right', distance: `${half} km`, icon: 'right' },
+        { instruction: `Continue straight on eco greenway approaching ${shortDest}`, distance: `${quarter} km`, icon: 'straight' },
+        { instruction: `Arrive safely at ${shortDest}`, distance: 'Destination', icon: 'arrive' },
+      ];
+    case 'Bicycle':
+      return [
+        { instruction: `Depart ${shortOrigin} via the designated cycle track`, distance: '400 m', icon: 'straight' },
+        { instruction: 'Turn right at the junction onto Main Green Cycleway', distance: `${quarter} km`, icon: 'right' },
+        { instruction: 'Follow dedicated bike lane through roundabout, 2nd exit', distance: `${half} km`, icon: 'straight' },
+        { instruction: 'Turn left onto destination approach pathway', distance: `${quarter} km`, icon: 'left' },
+        { instruction: `Arrive at bike docking hub near ${shortDest}`, distance: 'Destination', icon: 'arrive' },
+      ];
+    case 'Metro':
+      return [
+        { instruction: `Walk 250m from ${shortOrigin} to Nearest Metro Station`, distance: '250 m', icon: 'straight' },
+        { instruction: `Enter through automated fare gates and proceed to Platform 1`, distance: 'Station', icon: 'straight' },
+        { instruction: `Board Metro train heading towards ${shortDest} corridor`, distance: `${(distanceKm * 0.75).toFixed(1)} km`, icon: 'board' },
+        { instruction: `Alight at destination station and take Exit Gate 2`, distance: 'Station', icon: 'straight' },
+        { instruction: `Walk 200m towards ${shortDest} entrance`, distance: 'Destination', icon: 'arrive' },
+      ];
+    case 'Bus':
+      return [
+        { instruction: `Walk 150m from ${shortOrigin} to nearest bus shelter`, distance: '150 m', icon: 'straight' },
+        { instruction: `Board public transit bus along the main transit corridor`, distance: `${(distanceKm * 0.8).toFixed(1)} km`, icon: 'board' },
+        { instruction: `Alight at the designated transit stop nearest to destination`, distance: 'Stop', icon: 'straight' },
+        { instruction: `Walk 100m straight towards ${shortDest}`, distance: 'Destination', icon: 'arrive' },
+      ];
+    case 'EV':
+      return [
+        { instruction: `Start EV route from ${shortOrigin} onto primary road`, distance: '500 m', icon: 'straight' },
+        { instruction: 'Turn right onto bypass road / green corridor lane', distance: `${quarter} km`, icon: 'right' },
+        { instruction: 'Continue straight along the expressway passing EV charging station', distance: `${half} km`, icon: 'straight' },
+        { instruction: `Take exit ramp left towards ${shortDest}`, distance: '400 m', icon: 'left' },
+        { instruction: `Arrive at EV parking zone at ${shortDest}`, distance: 'Destination', icon: 'arrive' },
+      ];
+    default:
+      return [
+        { instruction: `Depart ${shortOrigin} heading towards main avenue`, distance: '500 m', icon: 'straight' },
+        { instruction: 'Turn left onto the arterial highway following GPS route guidance', distance: `${quarter} km`, icon: 'left' },
+        { instruction: 'Proceed straight through the overpass keeping to the right lane', distance: `${half} km`, icon: 'straight' },
+        { instruction: `Turn right onto ${shortDest} access road`, distance: '300 m', icon: 'right' },
+        { instruction: `Arrive at destination: ${shortDest}`, distance: 'Destination', icon: 'arrive' },
+      ];
+  }
+}
+
 /**
  * Plans and ranks routes across all 7 transport modes
  */
@@ -253,6 +334,7 @@ export async function planRoutes(
       pathCoordinates: path,
       color: TRANSPORT_MODES[item.mode].color,
       icon: TRANSPORT_MODES[item.mode].icon,
+      navigationSteps: generateNavigationSteps(item.mode, origin.name, destination.name, distance),
     };
   });
 

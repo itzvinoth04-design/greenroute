@@ -23,6 +23,7 @@ export const MapView: React.FC<MapViewProps> = ({
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const layerGroupRef = useRef<L.LayerGroup | null>(null);
+  const boundsRef = useRef<L.LatLngBounds | null>(null);
 
   // Initialize map once
   useEffect(() => {
@@ -155,6 +156,8 @@ export const MapView: React.FC<MapViewProps> = ({
       polyline.getLatLngs().forEach((ll: any) => latLngBounds.extend(ll));
     });
 
+    boundsRef.current = latLngBounds;
+
     // 2. If an active commute is running, render the commuter marker along the polyline
     if (activeCommute && activeCommute.route.pathCoordinates.length > 1) {
       const coords = activeCommute.route.pathCoordinates;
@@ -173,12 +176,15 @@ export const MapView: React.FC<MapViewProps> = ({
       const commuterIcon = L.divIcon({
         className: 'active-commuter-marker',
         html: `
-          <div style="background-color: ${activeCommute.route.color || '#10b981'}; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; border: 3px solid white; box-shadow: 0 0 15px ${activeCommute.route.color || '#10b981'}; animation: bounce 1s infinite;">
-            📍
+          <div style="position: relative; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;">
+            <div style="position: absolute; inset: 0; border-radius: 50%; background-color: ${activeCommute.route.color || '#10b981'}; opacity: 0.35; animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
+            <div style="position: relative; width: 34px; height: 34px; border-radius: 50%; background-color: ${activeCommute.route.color || '#10b981'}; display: flex; align-items: center; justify-content: center; color: white; font-size: 16px; border: 3px solid white; box-shadow: 0 4px 14px rgba(0,0,0,0.45);">
+              🧭
+            </div>
           </div>
         `,
-        iconSize: [36, 36],
-        iconAnchor: [18, 18],
+        iconSize: [44, 44],
+        iconAnchor: [22, 22],
       });
 
       L.marker([curLat, curLng], { icon: commuterIcon })
@@ -186,8 +192,10 @@ export const MapView: React.FC<MapViewProps> = ({
         .addTo(layers);
     }
 
-    // Fit map bounds comfortably
-    map.fitBounds(latLngBounds, { padding: [40, 40] });
+    // Fit map bounds comfortably on initial / selection change
+    if (!activeCommute || activeCommute.progressPercent <= 10) {
+      map.fitBounds(latLngBounds, { padding: [40, 40] });
+    }
   }, [routePlan, selectedRoute, onSelectRoute, userLocation, activeCommute]);
 
   return (
@@ -201,12 +209,21 @@ export const MapView: React.FC<MapViewProps> = ({
         <span className="sm:hidden">OSM Live Map</span>
       </div>
 
-      {/* Active Trip Navigation HUD overlay */}
+      {/* Active Trip Navigation HUD overlay with Recenter capability */}
       {activeCommute && (
-        <div className="absolute top-3 left-3 z-[1000] bg-emerald-950/90 text-white backdrop-blur-md px-3 py-1.5 rounded-xl border border-emerald-500/40 shadow-lg text-xs font-bold flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            if (mapInstanceRef.current && boundsRef.current) {
+              mapInstanceRef.current.fitBounds(boundsRef.current, { padding: [40, 40] });
+            }
+          }}
+          className="absolute top-3 left-3 z-[1000] bg-emerald-950/90 hover:bg-emerald-900 text-white backdrop-blur-md px-3 py-1.5 rounded-xl border border-emerald-500/40 shadow-lg text-xs font-bold flex items-center gap-2 transition"
+          title="Click to re-center map on route"
+        >
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-          <span>In Transit: {activeCommute.route.mode} ({activeCommute.progressPercent}%)</span>
-        </div>
+          <span>Navigating: {activeCommute.route.mode} ({activeCommute.progressPercent}%) • Recenter</span>
+        </button>
       )}
 
       {/* Selected Mode Quick Card on Map */}

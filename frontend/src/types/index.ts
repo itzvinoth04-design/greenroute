@@ -47,6 +47,11 @@ export interface ScoredRouteOption {
   pathCoordinates: [number, number][];
   color: string;
   icon: string;
+  navigationSteps?: Array<{
+    instruction: string;
+    distance: string;
+    icon: 'straight' | 'left' | 'right' | 'board' | 'arrive';
+  }>;
 }
 
 export interface RoutePlanResult {
