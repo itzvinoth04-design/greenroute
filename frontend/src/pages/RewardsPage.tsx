@@ -53,8 +53,8 @@ export const RewardsPage: React.FC = () => {
         description: 'Unlimited rides on Chennai Metro for one calendar day across all lines.',
         category: 'transit_pass',
         pointsCost: 150,
+        badgeIcon: 'ticket',
         available: true,
-        sponsor: 'Chennai Metro Rail Limited (CMRL)',
       },
       {
         id: 'rew-2',
@@ -62,8 +62,8 @@ export const RewardsPage: React.FC = () => {
         description: 'Funds planting a native shade tree (Neem, Peepal) via the Nizhal conservation initiative.',
         category: 'tree_planting',
         pointsCost: 200,
+        badgeIcon: 'trees',
         available: true,
-        sponsor: 'Nizhal Tree Conservation NGO',
       },
       {
         id: 'rew-3',
@@ -71,8 +71,8 @@ export const RewardsPage: React.FC = () => {
         description: '25% off farm-to-table plant-based lunches and cold-pressed juices.',
         category: 'sustainable_retail',
         pointsCost: 100,
+        badgeIcon: 'coffee',
         available: true,
-        sponsor: 'The Green Plate Cafe, Chennai',
       },
       {
         id: 'rew-4',
@@ -80,16 +80,71 @@ export const RewardsPage: React.FC = () => {
         description: 'Valid at participating municipal and highway EV charging hubs.',
         category: 'ev_credit',
         pointsCost: 250,
+        badgeIcon: 'zap',
         available: true,
-        sponsor: 'TNEB Green Grid Infrastructure',
       },
     ]);
 
     setLeaderboard([
-      { rank: 1, name: 'Priya Sundaram', city: 'Chennai', points: 1420, tripsCount: 52, carbonSavedKg: 138.4 },
-      { rank: 2, name: `${user?.name || 'Alex Green'} (You)`, city: user?.city || 'Chennai', points: user?.points || 450, tripsCount: user?.stats?.totalTrips || 18, carbonSavedKg: user?.stats?.totalCarbonSavedKg || 42.6 },
-      { rank: 3, name: 'Karthik Raja', city: 'Chennai', points: 390, tripsCount: 15, carbonSavedKg: 35.2 },
-      { rank: 4, name: 'Ananya Sharma', city: 'Chennai', points: 310, tripsCount: 12, carbonSavedKg: 28.0 },
+      {
+        rank: 1,
+        id: 'lead-1',
+        name: 'Priya Sundaram',
+        city: 'Chennai',
+        points: 1420,
+        preferredTransport: 'Metro',
+        totalCarbonSavedKg: 138.4,
+        isCurrentUser: false,
+      },
+      {
+        rank: 2,
+        id: 'lead-2',
+        name: `${user?.name || 'Alex Green'} (You)`,
+        city: user?.city || 'Chennai',
+        points: user?.points || 450,
+        preferredTransport: user?.preferredTransport || 'Metro',
+        totalCarbonSavedKg: user?.stats?.totalCarbonSavedKg || 42.6,
+        isCurrentUser: true,
+      },
+      {
+        rank: 3,
+        id: 'lead-3',
+        name: 'Karthik Raja',
+        city: 'Chennai',
+        points: 390,
+        preferredTransport: 'Bicycle',
+        totalCarbonSavedKg: 35.2,
+        isCurrentUser: false,
+      },
+      {
+        rank: 4,
+        id: 'lead-4',
+        name: 'Ananya Sharma',
+        city: 'Chennai',
+        points: 310,
+        preferredTransport: 'Bus',
+        totalCarbonSavedKg: 28.0,
+        isCurrentUser: false,
+      },
+    ]);
+
+    setRedemptions([
+      {
+        id: 'red-demo-1',
+        pointsSpent: 150,
+        status: 'active',
+        code: 'METRO-CMRL-9421',
+        createdAt: new Date(Date.now() - 172800000).toISOString(),
+        rewardItem: {
+          id: 'rew-1',
+          title: 'Metro 1-Day Commuter Pass (₹100 Value)',
+          description: 'Unlimited rides on Chennai Metro for one calendar day across all lines.',
+          pointsCost: 150,
+          category: 'transit_pass',
+          badgeIcon: 'ticket',
+          available: true,
+        },
+      },
     ]);
 
     setLoading(false);
@@ -128,15 +183,18 @@ export const RewardsPage: React.FC = () => {
 
     const mockRedemption: Redemption = {
       id: `red-${Date.now()}`,
-      voucherCode: `ECO-${item.category.toUpperCase().slice(0, 4)}-${Math.floor(1000 + Math.random() * 9000)}`,
+      pointsSpent: item.pointsCost,
       status: 'active',
+      code: `ECO-${item.category.toUpperCase().slice(0, 4)}-${Math.floor(1000 + Math.random() * 9000)}`,
       createdAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 30 * 86400000).toISOString(),
-      item: {
+      rewardItem: {
         id: item.id,
         title: item.title,
-        category: item.category,
+        description: item.description,
         pointsCost: item.pointsCost,
+        category: item.category,
+        badgeIcon: item.badgeIcon || 'ticket',
+        available: true,
       },
     };
 

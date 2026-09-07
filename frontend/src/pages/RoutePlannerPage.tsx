@@ -19,6 +19,9 @@ import {
   Award,
   CheckCircle2,
   Bot,
+  Crosshair,
+  XCircle,
+  Compass,
 } from 'lucide-react';
 import { api } from '../services/api';
 import { RoutePlanResult, ScoredRouteOption, TrafficLevel, TransportMode } from '../types';
@@ -26,6 +29,17 @@ import { MapView } from '../components/MapView';
 import { useAuth } from '../context/AuthContext';
 
 import { calculateFallbackRoutes } from '../services/routeCalculatorFallback';
+
+interface ActiveCommute {
+  route: ScoredRouteOption;
+  originName: string;
+  destName: string;
+  startTime: number;
+  progressPercent: number;
+  elapsedSeconds: number;
+  distanceRemainingKm: number;
+  status: 'navigating' | 'arrived';
+}
 
 export const RoutePlannerPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -38,11 +52,17 @@ export const RoutePlannerPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Live Location State
+  const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+  const [locatingUser, setLocatingUser] = useState(false);
+
   const [planResult, setPlanResult] = useState<RoutePlanResult | null>(null);
   const [selectedRoute, setSelectedRoute] = useState<ScoredRouteOption | null>(null);
 
-  // Trip recording state
-  const [recordingTrip, setRecordingTrip] = useState(false);
+  // Active Journey state
+  const [activeCommute, setActiveCommute] = useState<ActiveCommute | null>(null);
+
+  // Success celebration state
   const [tripRecordedSuccess, setTripRecordedSuccess] = useState<{
     points: number;
     mode: string;
@@ -69,7 +89,6 @@ export const RoutePlannerPage: React.FC = () => {
       console.warn('Live API unavailable or spin-up delayed. Calculating routes with local sustainability engine.');
     }
 
-    // Always fallback smoothly to instant local engine
     try {
       const fallbackResult = calculateFallbackRoutes(src, dest, traffic);
       setPlanResult(fallbackResult);
@@ -81,61 +100,94 @@ export const RoutePlannerPage: React.FC = () => {
     }
   };
 
-  // Auto-calculate on initial load
   useEffect(() => {
     handleCalculateRoutes();
   }, []);
 
-  const handleRecordTrip = async (route: ScoredRouteOption) => {
+  const handleLocateMe = () => {
+    if (!navigator.geolocation) {
+      alert('Geolocation is not supported by your browser.');
+      return;
+    }
+    setLocatingUser(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setUserLocation([latitude, longitude]);
+        const locString = `Current Location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`;
+        setSource(locString);
+        setLocatingUser(false);
+        handleCalculateRoutes(locString, destination, trafficDensity);
+      },
+      (err) => {
+        console.warn('Geolocation error:', err);
+        setUserLocation([13.1121, 80.2450]);
+        setSource('Perambur, Chennai');
+        setLocatingUser(false);
+        alert('GPS permission required. Set location to Perambur, Chennai.');
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  const handleStartCommute = (route: ScoredRouteOption) => {
     if (!user) {
       navigate('/login');
       return;
     }
 
-    setRecordingTrip(true);
-    try {
-      const res = await api.trips.record({
-        source: planResult?.origin.name || source,
-        destination: planResult?.destination.name || destination,
-        distance: route.distanceKm,
-        duration: route.travelTimeMinutes,
-        cost: route.costEstimate,
-        transportType: route.mode,
-        carbonEmission: route.carbonEmissionKg,
-        carbonSaved: route.carbonSavedKg,
-        sustainabilityScore: route.sustainabilityScore,
-        trafficDensity: route.trafficDensity,
-        pointsEarned: route.pointsEarned,
-      });
-
-      if (res.data?.success) {
-        confetti({
-          particleCount: 80,
-          spread: 70,
-          origin: { y: 0.6 },
-          colors: ['#10b981', '#059669', '#34d399', '#f59e0b'],
-        });
-
-        setTripRecordedSuccess({
-          points: route.pointsEarned,
-          mode: route.mode,
-          carbonSaved: route.carbonSavedKg,
-        });
-
-        await refreshUser();
-        setRecordingTrip(false);
-        return;
-      }
-    } catch {
-      console.warn('Backend unavailable, recording green trip locally.');
+    if (activeCommute) {
+      alert(`You already have an active commute with ${activeCommute.route.mode}. Please dismiss or complete it first.`);
+      return;
     }
 
-    // Local instant trip recording fallback
+    setSelectedRoute(route);
+    setActiveCommute({
+      route,
+      originName: planResult?.origin.name || source,
+      destName: planResult?.destination.name || destination,
+      startTime: Date.now(),
+      progressPercent: 10,
+      elapsedSeconds: 0,
+      distanceRemainingKm: Number((route.distanceKm * 0.9).toFixed(2)),
+      status: 'navigating',
+    });
+  };
+
+  useEffect(() => {
+    if (!activeCommute || activeCommute.status === 'arrived') return;
+
+    const interval = setInterval(() => {
+      setActiveCommute((prev) => {
+        if (!prev || prev.status === 'arrived') return prev;
+        const newProgress = Math.min(100, prev.progressPercent + 10);
+        const remainingKm = Number((prev.route.distanceKm * (1 - newProgress / 100)).toFixed(2));
+        return {
+          ...prev,
+          progressPercent: newProgress,
+          distanceRemainingKm: Math.max(0, remainingKm),
+          elapsedSeconds: prev.elapsedSeconds + 3,
+          status: newProgress >= 100 ? 'arrived' : 'navigating',
+        };
+      });
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [activeCommute?.status]);
+
+  const handleDismissCommute = () => {
+    setActiveCommute(null);
+  };
+
+  const handleCompleteCommute = async () => {
+    if (!activeCommute) return;
+    const route = activeCommute.route;
+
     confetti({
-      particleCount: 100,
-      spread: 75,
+      particleCount: 120,
+      spread: 80,
       origin: { y: 0.6 },
-      colors: ['#10b981', '#059669', '#34d399', '#f59e0b'],
+      colors: ['#10b981', '#059669', '#34d399', '#f59e0b', '#3b82f6'],
     });
 
     if (user) {
@@ -161,7 +213,8 @@ export const RoutePlannerPage: React.FC = () => {
       carbonSaved: route.carbonSavedKg,
     });
 
-    setRecordingTrip(false);
+    setActiveCommute(null);
+    await refreshUser();
   };
 
   const getModeIcon = (mode: TransportMode) => {
@@ -202,9 +255,20 @@ export const RoutePlannerPage: React.FC = () => {
           className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end"
         >
           <div className="md:col-span-4">
-            <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 ml-1">
-              Starting Location (A)
-            </label>
+            <div className="flex items-center justify-between mb-1 ml-1">
+              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400">
+                Starting Location (A)
+              </label>
+              <button
+                type="button"
+                onClick={handleLocateMe}
+                disabled={locatingUser}
+                className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800 transition"
+              >
+                <Crosshair className={`w-3 h-3 ${locatingUser ? 'animate-spin' : ''}`} />
+                <span>{locatingUser ? 'Locating...' : 'Locate Me'}</span>
+              </button>
+            </div>
             <div className="relative">
               <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
@@ -327,6 +391,80 @@ export const RoutePlannerPage: React.FC = () => {
         )}
       </div>
 
+      {/* Active Commute Live HUD Banner (Only 1 mode selectable at a time) */}
+      {activeCommute && (
+        <div className="p-5 rounded-3xl bg-gradient-to-r from-emerald-950 via-teal-950 to-slate-900 text-white shadow-2xl border border-emerald-500/50 animate-in fade-in slide-in-from-top-4 space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div
+                className="w-12 h-12 rounded-2xl flex items-center justify-center text-white text-xl shadow-lg"
+                style={{ backgroundColor: activeCommute.route.color }}
+              >
+                {getModeIcon(activeCommute.route.mode)}
+              </div>
+              <div>
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+                  <span className="text-[11px] uppercase tracking-wider font-extrabold text-emerald-300">
+                    Live Journey In Progress
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-slate-300 font-mono">
+                    Elapsed: {Math.floor(activeCommute.elapsedSeconds / 60).toString().padStart(2, '0')}:{(activeCommute.elapsedSeconds % 60).toString().padStart(2, '0')}
+                  </span>
+                </div>
+                <h3 className="text-base sm:text-lg font-black text-white flex items-center gap-1.5 flex-wrap">
+                  <span>Traveling via {activeCommute.route.mode}</span>
+                  <span className="text-xs text-slate-300 font-normal">
+                    ({activeCommute.originName} &rarr; {activeCommute.destName})
+                  </span>
+                </h3>
+              </div>
+            </div>
+
+            {/* Commute Controls: Dismiss or Complete upon arrival */}
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <button
+                type="button"
+                onClick={handleDismissCommute}
+                className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-rose-500/20 text-slate-200 hover:text-rose-200 border border-white/20 hover:border-rose-400 text-xs font-bold transition flex items-center gap-1.5"
+              >
+                <XCircle className="w-4 h-4 text-rose-400" />
+                <span>Dismiss / Change Mode</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCompleteCommute}
+                className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shadow-lg shadow-emerald-500/30 transition flex items-center gap-1.5"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>I Have Arrived (+{activeCommute.route.pointsEarned} pts)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Progress Bar & Kinematic Waypoint Metric */}
+          <div className="space-y-1.5 pt-2 border-t border-white/10">
+            <div className="flex justify-between text-xs font-semibold text-emerald-200">
+              <span className="flex items-center gap-1">
+                <Compass className="w-3.5 h-3.5" />
+                <span>Waypoints Reached: {activeCommute.progressPercent}%</span>
+              </span>
+              <span>{activeCommute.distanceRemainingKm} km to Destination B</span>
+            </div>
+            <div className="w-full h-2.5 rounded-full bg-white/10 overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-emerald-400 to-teal-300 transition-all duration-700 rounded-full"
+                style={{ width: `${activeCommute.progressPercent}%` }}
+              ></div>
+            </div>
+            <p className="text-[11px] text-slate-300">
+              Points are credited only upon completing the journey and arriving at Destination B.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Success Modal / Banner */}
       {tripRecordedSuccess && (
         <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-800 flex items-center justify-between gap-3 animate-in fade-in">
@@ -336,7 +474,7 @@ export const RoutePlannerPage: React.FC = () => {
             </div>
             <div>
               <h4 className="text-sm font-bold text-emerald-900 dark:text-emerald-100">
-                Trip Successfully Logged!
+                Trip Successfully Logged & Verified!
               </h4>
               <p className="text-xs text-emerald-700 dark:text-emerald-300">
                 You earned <strong>+{tripRecordedSuccess.points} Green Points</strong> and saved{' '}
@@ -442,7 +580,7 @@ export const RoutePlannerPage: React.FC = () => {
                     <div>
                       <span className="text-[10px] text-slate-400 block font-medium">Cost</span>
                       <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                        ${route.costEstimate.toFixed(2)}
+                        ₹{route.costEstimate}
                       </span>
                     </div>
                     <div>
@@ -487,17 +625,34 @@ export const RoutePlannerPage: React.FC = () => {
                         <Bot className="w-4 h-4" />
                       </button>
 
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRecordTrip(route);
-                        }}
-                        disabled={recordingTrip}
-                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition"
-                      >
-                        Start & Earn
-                      </button>
+                      {activeCommute?.route.mode === route.mode ? (
+                        <button
+                          disabled
+                          className="px-3 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/40 font-bold text-xs flex items-center gap-1.5"
+                        >
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                          <span>In Transit...</span>
+                        </button>
+                      ) : activeCommute ? (
+                        <button
+                          disabled
+                          title="You have an active commute in progress. Dismiss it in the banner above to switch."
+                          className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 font-semibold text-xs cursor-not-allowed opacity-60"
+                        >
+                          Locked
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleStartCommute(route);
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm shadow-emerald-600/30 transition flex items-center gap-1"
+                        >
+                          <span>Start & Earn</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -508,11 +663,13 @@ export const RoutePlannerPage: React.FC = () => {
 
         {/* Right Column: Leaflet Map & Details (7 cols) */}
         <div className="lg:col-span-7 space-y-4">
-          <div className="h-[520px] rounded-3xl overflow-hidden shadow-xl">
+          <div className="h-[360px] sm:h-[460px] lg:h-[520px] rounded-3xl overflow-hidden shadow-xl">
             <MapView
               routePlan={planResult}
               selectedRoute={selectedRoute}
               onSelectRoute={(r) => setSelectedRoute(r)}
+              userLocation={userLocation}
+              activeCommute={activeCommute}
             />
           </div>
 

@@ -42,59 +42,71 @@ export const DashboardPage: React.FC = () => {
     const fetchInsights = async () => {
       try {
         const res = await api.trips.getInsights();
-        if (res.data?.success) {
+        if (res.data?.success && res.data.insights) {
           setInsights(res.data.insights);
+          setLoading(false);
           return;
         }
       } catch (err) {
         console.warn('Backend unavailable, compiling local sustainability metrics...');
       }
 
-      // Local fallback insights based on user profile
+      // Local fallback insights perfectly matching EcoInsights schema
       const savedKg = user?.stats?.totalCarbonSavedKg || 42.6;
       const tripsCount = user?.stats?.totalTrips || 18;
       const distKm = user?.stats?.totalDistanceKm || 230.5;
 
       setInsights({
         totalTrips: tripsCount,
-        totalDistanceKm: distKm,
         totalCarbonSavedKg: savedKg,
-        totalCarbonEmittedKg: Number((distKm * 0.04).toFixed(1)),
-        treeEquivalent: Number((savedKg / 21).toFixed(1)),
-        iceCarKmOffset: Number((savedKg / 0.2).toFixed(0)),
-        modeBreakdown: [
-          { mode: 'Metro', count: 10, carbonSavedKg: 28.5 },
-          { mode: 'Bicycle', count: 5, carbonSavedKg: 9.6 },
-          { mode: 'Bus', count: 3, carbonSavedKg: 4.5 },
+        totalEmissionsKg: Number((distKm * 0.04).toFixed(1)),
+        totalDistanceKm: distKm,
+        avgSustainabilityScore: 92,
+        mostUsedTransport: 'Metro',
+        greenTripsCount: Math.max(1, tripsCount - 1),
+        modeDistribution: [
+          { mode: 'Metro', count: 10, carbonSaved: 28.5, distance: 130.0, color: '#8b5cf6' },
+          { mode: 'Bicycle', count: 5, carbonSaved: 9.6, distance: 45.5, color: '#06b6d4' },
+          { mode: 'Bus', count: 3, carbonSaved: 4.5, distance: 55.0, color: '#f59e0b' },
         ],
-        monthlyTrends: [
-          { month: 'Apr', carbonSaved: 6.2, trips: 3 },
-          { month: 'May', carbonSaved: 10.4, trips: 5 },
-          { month: 'Jun', carbonSaved: 12.8, trips: 6 },
-          { month: 'Jul', carbonSaved: 15.3, trips: 7 },
-          { month: 'Aug', carbonSaved: 22.1, trips: 10 },
-          { month: 'Sep', carbonSaved: savedKg, trips: tripsCount },
+        monthlyTrend: [
+          { month: 'Apr', emissionsSaved: 6.2, trips: 3, avgScore: 88 },
+          { month: 'May', emissionsSaved: 10.4, trips: 5, avgScore: 90 },
+          { month: 'Jun', emissionsSaved: 12.8, trips: 6, avgScore: 91 },
+          { month: 'Jul', emissionsSaved: 15.3, trips: 7, avgScore: 93 },
+          { month: 'Aug', emissionsSaved: 22.1, trips: 10, avgScore: 94 },
+          { month: 'Sep', emissionsSaved: savedKg, trips: tripsCount, avgScore: 95 },
         ],
         recentTrips: [
           {
             id: 'trip-1',
+            userId: user?.id || 'demo-alex',
             source: 'Perambur',
             destination: 'Chennai Central',
             distance: 6.2,
+            duration: 12,
+            cost: 20,
             transportType: 'Metro',
             carbonSaved: 0.99,
             carbonEmission: 0.25,
+            sustainabilityScore: 92,
+            trafficDensity: 'Moderate',
             pointsEarned: 18,
             createdAt: new Date().toISOString(),
           },
           {
             id: 'trip-2',
+            userId: user?.id || 'demo-alex',
             source: 'T. Nagar',
             destination: 'Anna University',
             distance: 4.1,
+            duration: 18,
+            cost: 0,
             transportType: 'Bicycle',
             carbonSaved: 0.82,
             carbonEmission: 0.0,
+            sustainabilityScore: 96,
+            trafficDensity: 'Moderate',
             pointsEarned: 16,
             createdAt: new Date(Date.now() - 86400000).toISOString(),
           },
